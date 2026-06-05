@@ -76,7 +76,7 @@ final class AudioEngine: ObservableObject {
     private func launchDSPTask(buffer: LockFreeRingBuffer,
                                context: DSPContext,
                                sampleRate: Float) {
-        dspTask = Task.detached(priority: .userInteractive) { [weak self] in
+        dspTask = Task.detached(priority: .high) { [weak self] in
             var prevHalf    = [Float](repeating: 0, count: context.hopSize)
             var window      = [Float](repeating: 0, count: context.fftSize)
             var magnitudeDB = [Float](repeating: 0, count: context.binCount)
@@ -92,7 +92,7 @@ final class AudioEngine: ObservableObject {
 
                 // Read new hop into a local buffer
                 var newHalf = [Float](repeating: 0, count: context.hopSize)
-                newHalf.withUnsafeMutableBufferPointer { ptr in
+                _ = newHalf.withUnsafeMutableBufferPointer { ptr in
                     buffer.read(into: ptr.baseAddress!, count: context.hopSize)
                 }
 
