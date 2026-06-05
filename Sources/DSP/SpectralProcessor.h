@@ -13,6 +13,9 @@ SpectralProcessorContext *spectral_processor_create(int fft_size);
 /// Free all resources.
 void spectral_processor_destroy(SpectralProcessorContext *ctx);
 
+/// Number of magnitude bins produced by process: fft_size/2 + 1.
+int spectral_processor_bin_count(SpectralProcessorContext *ctx);
+
 /// Apply Hann window, compute real FFT, convert to dB magnitude.
 /// `samples`     — input buffer, exactly fft_size frames
 /// `magnitude_db` — output buffer, fft_size/2 + 1 bins
