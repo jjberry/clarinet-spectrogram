@@ -1,36 +1,34 @@
 import Foundation
 
-/// Single-producer single-consumer lock-free ring buffer for audio samples.
-/// Capacity must be a power of two.
-final class LockFreeRingBuffer {
-    private let capacity: Int
-    private let mask: Int
-    private var buffer: [Float]
-    // writeIndex owned by audio thread; readIndex owned by DSP thread
-    private var writeIndex: Int = 0
-    private var readIndex: Int = 0
+/// Swift wrapper around the C lock-free SPSC ring buffer.
+/// Marked @unchecked Sendable so it can cross actor boundaries safely —
+/// thread safety is guaranteed by the C acquire/release atomics.
+final class LockFreeRingBuffer: @unchecked Sendable {
+    private let buf: OpaquePointer
 
     init(capacity: Int) {
         precondition(capacity > 0 && capacity & (capacity - 1) == 0,
                      "Capacity must be a power of two")
-        self.capacity = capacity
-        self.mask = capacity - 1
-        self.buffer = [Float](repeating: 0, count: capacity)
+        guard let b = rb_create(Int32(capacity)) else {
+            fatalError("rb_create failed — allocation error")
+        }
+        buf = b
     }
+
+    deinit { rb_destroy(buf) }
 
     /// Called on the audio (producer) thread.
     func write(_ samples: UnsafePointer<Float>, count: Int) {
-        // TODO: implement with atomic store/load for head/tail indices
+        rb_write(buf, samples, Int32(count))
     }
 
-    /// Called on the DSP (consumer) thread. Returns number of samples actually read.
+    /// Called on the DSP (consumer) thread. Returns samples actually read.
     @discardableResult
     func read(into output: UnsafeMutablePointer<Float>, count: Int) -> Int {
-        // TODO: implement with atomic store/load for head/tail indices
-        return 0
+        Int(rb_read(buf, output, Int32(count)))
     }
 
     var availableToRead: Int {
-        (writeIndex - readIndex) & mask
+        Int(rb_available_to_read(buf))
     }
 }
