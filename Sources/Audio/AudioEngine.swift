@@ -81,6 +81,7 @@ final class AudioEngine: ObservableObject {
             var window      = [Float](repeating: 0, count: context.fftSize)
             var magnitudeDB = [Float](repeating: 0, count: context.binCount)
             let binHz       = sampleRate / Float(context.fftSize)
+            var frameIndex  = 0
 
             while !Task.isCancelled {
                 // Block until a full hop of new samples is available
@@ -119,7 +120,9 @@ final class AudioEngine: ObservableObject {
                 let data = SpectralData(magnitudeDB: magnitudeDB,
                                         centroid: centroidHz,
                                         oddEvenRatio: 0,
-                                        fundamental: 0)
+                                        fundamental: 0,
+                                        frameIndex: frameIndex)
+                frameIndex += 1
 
                 await MainActor.run { [weak self] in
                     self?.spectralData = data
