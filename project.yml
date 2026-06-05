@@ -28,3 +28,16 @@ targets:
     dependencies:
       - sdk: Accelerate.framework
       - sdk: AVFoundation.framework
+
+  ClariScopeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+      - path: Sources/DSP
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.jeff.clarinscope.tests
+      SWIFT_OBJC_BRIDGING_HEADER: Sources/DSP/Bridging-Header.h
+      SWIFT_STRICT_CONCURRENCY: minimal
+    dependencies:
+      - sdk: Accelerate.framework
