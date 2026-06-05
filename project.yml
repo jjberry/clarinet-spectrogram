@@ -1,0 +1,30 @@
+name: ClariScope
+options:
+  bundleIdPrefix: com.jeff
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15"
+  createIntermediateGroups: true
+
+settings:
+  SWIFT_VERSION: 6.0
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+  ENABLE_HARDENED_RUNTIME: YES
+
+targets:
+  ClariScope:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+        excludes:
+          - "**/.DS_Store"
+    resources:
+      - path: Resources
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.jeff.clarinscope
+      INFOPLIST_FILE: Resources/Info.plist
+      SWIFT_OBJC_BRIDGING_HEADER: Sources/DSP/Bridging-Header.h
+    dependencies:
+      - sdk: Accelerate.framework
+      - sdk: AVFoundation.framework
