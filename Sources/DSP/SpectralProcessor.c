@@ -140,3 +140,41 @@ float spectral_processor_odd_even_ratio(const float *magnitude_db,
     // Values > 1 mean odd harmonics dominate — normal for clarinet's cylindrical bore
     return even_sum > 1e-10f ? odd_sum / even_sum : 0.0f;
 }
+
+float spectral_processor_hps(const float *magnitude_db,
+                              int bin_count,
+                              float bin_hz,
+                              int num_harmonics) {
+    if (!magnitude_db || bin_count < 2 || bin_hz <= 0.0f) return 0.0f;
+    if (num_harmonics < 2) num_harmonics = 2;
+
+    // Search range: 80 Hz (low clarinet/bass clarinet) to 2 kHz (altissimo)
+    int min_bin = (int)ceilf(80.0f  / bin_hz);
+    int max_bin = (int)floorf(2000.0f / bin_hz);
+    // With num_harmonics stages the highest usable bin is bin_count / num_harmonics
+    if (max_bin >= bin_count / num_harmonics) max_bin = bin_count / num_harmonics - 1;
+    if (min_bin < 1 || min_bin > max_bin) return 0.0f;
+
+    float best_product = -1.0f;
+    int   best_bin     =  0;
+
+    for (int b = min_bin; b <= max_bin; b++) {
+        float product = 1.0f;
+        for (int h = 1; h <= num_harmonics; h++) {
+            int idx = b * h;
+            if (idx >= bin_count) { product = 0.0f; break; }
+            // Convert dB → linear amplitude: 10^(dB/20)
+            product *= powf(10.0f, magnitude_db[idx] * 0.05f);
+        }
+        if (product > best_product) {
+            best_product = product;
+            best_bin     = b;
+        }
+    }
+
+    if (best_bin == 0) return 0.0f;
+    // Reject if fundamental bin is below the silence floor
+    if (magnitude_db[best_bin] < -70.0f) return 0.0f;
+
+    return (float)best_bin * bin_hz;
+}

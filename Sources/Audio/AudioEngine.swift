@@ -26,6 +26,7 @@ private final class DSPContext: @unchecked Sendable {
 final class AudioEngine: ObservableObject {
 
     @Published private(set) var spectralData = SpectralData()
+    @Published private(set) var sampleRate: Float = 44_100
 
     private let avEngine   = AVAudioEngine()
     private let ringBuffer = LockFreeRingBuffer(capacity: 16384)
@@ -52,16 +53,12 @@ final class AudioEngine: ObservableObject {
     // MARK: - Private
 
     private func beginCapture() {
-        let inputNode  = avEngine.inputNode
-        let format     = inputNode.outputFormat(forBus: 0)
-        let sampleRate = Float(format.sampleRate)
+        let inputNode = avEngine.inputNode
+        let format    = inputNode.outputFormat(forBus: 0)
+        sampleRate    = Float(format.sampleRate)
 
-        // Capture only Sendable values for the real-time tap closure
-        let buf = ringBuffer
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            guard let data = buffer.floatChannelData?[0] else { return }
-            buf.write(data, count: Int(buffer.frameLength))
-        }
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format,
+                             block: Self.makeTapBlock(buf: ringBuffer))
 
         do {
             try avEngine.start()
@@ -71,6 +68,15 @@ final class AudioEngine: ObservableObject {
         }
 
         launchDSPTask(buffer: ringBuffer, context: dsp, sampleRate: sampleRate)
+    }
+
+    // Defined nonisolated so the returned closure has no actor isolation —
+    // AVFAudio calls it on a real-time thread, not the main actor.
+    private nonisolated static func makeTapBlock(buf: LockFreeRingBuffer) -> AVAudioNodeTapBlock {
+        { buffer, _ in
+            guard let data = buffer.floatChannelData?[0] else { return }
+            buf.write(data, count: Int(buffer.frameLength))
+        }
     }
 
     private func launchDSPTask(buffer: LockFreeRingBuffer,
@@ -117,10 +123,24 @@ final class AudioEngine: ObservableObject {
                                                 binHz)
                 }
 
+                let fundamentalHz = magnitudeDB.withUnsafeBufferPointer {
+                    spectral_processor_hps($0.baseAddress,
+                                           Int32($0.count),
+                                           binHz,
+                                           5)
+                }
+
+                let oddEvenRatio = magnitudeDB.withUnsafeBufferPointer {
+                    spectral_processor_odd_even_ratio($0.baseAddress,
+                                                      Int32($0.count),
+                                                      fundamentalHz,
+                                                      sampleRate)
+                }
+
                 let data = SpectralData(magnitudeDB: magnitudeDB,
                                         centroid: centroidHz,
-                                        oddEvenRatio: 0,
-                                        fundamental: 0,
+                                        oddEvenRatio: oddEvenRatio,
+                                        fundamental: fundamentalHz,
                                         frameIndex: frameIndex)
                 frameIndex += 1
 

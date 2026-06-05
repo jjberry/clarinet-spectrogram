@@ -8,11 +8,8 @@ struct SpectrumView: View {
     // dB display range
     private let dbFloor: Float = -100
     private let dbCeil:  Float = -10
-    // Frequency display range
     private let maxHz:   Float = 10_000
-    // Must match AudioEngine's DSPContext
-    private let sampleRate: Float = 44_100
-    private let fftSize:    Int   = 4_096
+    private let fftSize: Int   = 4_096
     // EMA weight for each new frame — lower → slower convergence
     private let alpha: Float = 0.08
 
@@ -33,14 +30,14 @@ struct SpectrumView: View {
                 .background(Color(white: 0.07))
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 220)
+        .frame(height: 270)
         .background(Color.black)
     }
 
     // MARK: - Coordinate helpers
 
     private func plotRect(for size: CGSize) -> CGRect {
-        CGRect(x: 36, y: 6, width: size.width - 44, height: size.height - 26)
+        CGRect(x: 64, y: 8, width: size.width - 72, height: size.height - 44)
     }
 
     private func xFor(_ hz: Float, in r: CGRect) -> CGFloat {
@@ -101,7 +98,7 @@ struct SpectrumView: View {
     }
 
     private func drawAxisLabels(in context: inout GraphicsContext, plot: CGRect) {
-        let font  = Font.system(size: 9)
+        let font  = Font.system(size: 24)
         let color = Color(white: 0.5)
 
         // dB axis (left)
@@ -138,7 +135,7 @@ struct SpectrumView: View {
     private func drawCurve(in context: inout GraphicsContext,
                             bins: [Float], plot: CGRect,
                             color: Color, filled: Bool, dashed: Bool) {
-        let binHz  = sampleRate / Float(fftSize)
+        let binHz  = audioEngine.sampleRate / Float(fftSize)
         let maxBin = min(bins.count - 1, Int(maxHz / binHz))
         guard maxBin > 0 else { return }
 
@@ -210,7 +207,7 @@ struct SpectrumView: View {
 
     private func drawMetrics(in context: inout GraphicsContext,
                               sd: SpectralData, size: CGSize) {
-        let font = Font.system(size: 10).monospacedDigit()
+        let font = Font.system(size: 26).monospacedDigit()
         var y: CGFloat = 10
 
         if sd.centroid > 0 {
@@ -218,7 +215,7 @@ struct SpectrumView: View {
                 Text("C \(Int(sd.centroid)) Hz").font(font).foregroundColor(.yellow),
                 at: CGPoint(x: size.width - 8, y: y), anchor: .topTrailing
             )
-            y += 14
+            y += 34
         }
         if sd.oddEvenRatio > 0 {
             context.draw(

@@ -55,13 +55,14 @@ private final class SpectrogramBuffer: ObservableObject {
     }
 
     /// Push one FFT frame. Called on the main thread only.
-    func push(magnitudeDB bins: [Float], dbFloor: Float, dbCeil: Float) {
+    /// `maxBin` limits the displayed frequency range; pass `bins.count - 1` for full range.
+    func push(magnitudeDB bins: [Float], dbFloor: Float, dbCeil: Float, maxBin: Int) {
         guard !bins.isEmpty,
               let base = cgCtx.data?.assumingMemoryBound(to: UInt8.self) else { return }
 
-        let invRange = 1.0 / (dbCeil - dbFloor)
-        let binCount = bins.count
-        let stride   = maxColumns * 4      // bytes per row in CGContext
+        let invRange  = 1.0 / (dbCeil - dbFloor)
+        let topBin    = min(maxBin, bins.count - 1)
+        let stride    = maxColumns * 4      // bytes per row in CGContext
 
         // Shift all rows left by one pixel (discard leftmost column)
         for r in 0..<height {
@@ -69,12 +70,13 @@ private final class SpectrogramBuffer: ObservableObject {
             memmove(row, row.advanced(by: 4), stride - 4)
         }
 
-        // Write new column at the right edge (maxColumns - 1)
-        // CGContext row 0 is the bottom of the image → low frequency at bottom, high at top
+        // Write new column at the right edge (maxColumns - 1).
+        // CGImage row 0 renders at the top in SwiftUI, so map r=0 → highest bin
+        // so that high frequencies appear at top and low frequencies at bottom.
         let lastCol = maxColumns - 1
         for r in 0..<height {
-            let binIdx = r * (binCount - 1) / max(1, height - 1)
-            let dB     = bins[min(binIdx, binCount - 1)]
+            let binIdx = (height - 1 - r) * topBin / max(1, height - 1)
+            let dB     = bins[min(binIdx, topBin)]
             let t      = max(0.0, min(1.0, (dB - dbFloor) * invRange))
             let lut    = colorLUT[Int(t * 255)]
             let i      = (r * maxColumns + lastCol) * 4
@@ -98,11 +100,20 @@ private final class SpectrogramBuffer: ObservableObject {
 struct SpectrogramView: View {
     @EnvironmentObject var audioEngine: AudioEngine
 
-    // dB range mapped to the color LUT
-    private let dbFloor: Float = -100
-    private let dbCeil:  Float = -10
+    private let dbFloor:    Float = -100
+    private let dbCeil:     Float = -10
+    private let fftSize: Int = 4_096
 
-    @StateObject private var buffer = SpectrogramBuffer(maxColumns: 900, height: 300)
+    @State private var limitHz: Float? = 10_000   // nil = full range
+
+    @StateObject private var buffer = SpectrogramBuffer(maxColumns: 900, height: 512)
+
+    private var maxBin: Int {
+        let binCount = audioEngine.spectralData.magnitudeDB.count
+        guard let hz = limitHz, hz > 0 else { return binCount - 1 }
+        let binHz = audioEngine.sampleRate / Float(fftSize)
+        return min(Int(hz / binHz), binCount - 1)
+    }
 
     var body: some View {
         Canvas { context, size in
@@ -112,13 +123,65 @@ struct SpectrogramView: View {
                     in: CGRect(origin: .zero, size: size)
                 )
             }
+            drawHarmonicMarkers(in: &context, size: size)
         }
         .onChange(of: audioEngine.spectralData.frameIndex) { _, _ in
             let bins = audioEngine.spectralData.magnitudeDB
-            buffer.push(magnitudeDB: bins, dbFloor: dbFloor, dbCeil: dbCeil)
+            buffer.push(magnitudeDB: bins, dbFloor: dbFloor, dbCeil: dbCeil, maxBin: maxBin)
+        }
+        .overlay(alignment: .topTrailing) {
+            freqRangeToggle
+                .padding(8)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 320)
+        .frame(minHeight: 320, maxHeight: .infinity)
         .background(Color.black)
+    }
+
+    private func drawHarmonicMarkers(in context: inout GraphicsContext, size: CGSize) {
+        let fundamental = audioEngine.spectralData.fundamental
+        guard fundamental > 0 else { return }
+
+        let displayMax = limitHz ?? (audioEngine.sampleRate / 2)
+        guard displayMax > 0 else { return }
+
+        for n in 1...16 {
+            let freq = fundamental * Float(n)
+            guard freq <= displayMax else { break }
+
+            // Map frequency to Y: low freq at bottom, high at top
+            let yFrac = CGFloat(freq / displayMax)
+            let y     = size.height * (1.0 - yFrac)
+
+            var path = Path()
+            path.move(to:    CGPoint(x: 0,          y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+
+            let color: Color = n == 1 ? .yellow : .white
+            context.stroke(path,
+                           with: .color(color.opacity(n == 1 ? 0.8 : 0.35)),
+                           lineWidth: n == 1 ? 1.5 : 0.75)
+        }
+    }
+
+    private var freqRangeToggle: some View {
+        HStack(spacing: 0) {
+            toggleButton(label: "10 kHz", active: limitHz == 10_000) { limitHz = 10_000 }
+            toggleButton(label: "Full",   active: limitHz == nil)    { limitHz = nil    }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.3), lineWidth: 1))
+    }
+
+    private func toggleButton(label: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 26, weight: .medium))
+                .foregroundColor(active ? .black : .white.opacity(0.7))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(active ? Color.white.opacity(0.85) : Color.white.opacity(0.1))
+        }
+        .buttonStyle(.plain)
     }
 }

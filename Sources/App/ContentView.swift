@@ -9,7 +9,7 @@ struct ContentView: View {
             Divider()
             SpectrumView()
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .frame(minWidth: 900, minHeight: 700)
         .background(Color.black)
         .onAppear { audioEngine.start() }
         .onDisappear { audioEngine.stop() }

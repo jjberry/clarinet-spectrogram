@@ -35,6 +35,15 @@ float spectral_processor_odd_even_ratio(const float *magnitude_db,
                                         float fundamental_hz,
                                         float sample_rate);
 
+/// Harmonic Product Spectrum pitch estimator.
+/// Multiplies downsampled copies of the magnitude spectrum to find the fundamental.
+/// `num_harmonics` — number of HPS stages (4–5 recommended).
+/// Returns fundamental frequency in Hz, or 0 if no pitch detected / signal too quiet.
+float spectral_processor_hps(const float *magnitude_db,
+                              int bin_count,
+                              float bin_hz,
+                              int num_harmonics);
+
 #ifdef __cplusplus
 }
 #endif
