@@ -10,7 +10,7 @@ class BandpassProcessor : public HarmonicProcessor
 {
 public:
     static constexpr int kMaxHarmonics = 16;
-    static constexpr float kQFactor    = 30.0f; // narrow enough to isolate each partial
+    static constexpr float kQFactor    = 15.0f; // wide enough to tolerate pitch wobble
 
     void prepare (double sampleRate, int samplesPerBlock) override;
     void process (juce::AudioBuffer<float>& buffer,

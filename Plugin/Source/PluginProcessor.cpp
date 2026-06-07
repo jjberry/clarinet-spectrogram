@@ -65,6 +65,9 @@ void ClariSynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     currentSampleRate = sampleRate;
     currentBlockSize  = samplesPerBlock;
     accumulatorFill   = 0;
+    smoothedHz        = 0.0f;
+    lastValidHz       = 0.0f;
+    silenceFrames     = 0;
 
     harmonicProcessor->prepare (sampleRate, samplesPerBlock);
 }
@@ -128,9 +131,28 @@ void ClariSynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         {
             spectral_processor_process (spectralCtx, fftAccumulator.data(), magnitudeDb.data());
             float binHz = (float)(currentSampleRate / kFftSize);
-            fundamentalHz.store (pitchDetector->detectPitch (magnitudeDb.data(),
-                                                              (int) magnitudeDb.size(),
-                                                              binHz));
+            float rawHz  = pitchDetector->detectPitch (magnitudeDb.data(),
+                                                       (int) magnitudeDb.size(), binHz);
+
+            if (rawHz > 0.0f)
+            {
+                // EMA smoothing — glide toward new estimate
+                smoothedHz    = (smoothedHz > 0.0f)
+                                  ? kPitchEmaAlpha * rawHz + (1.0f - kPitchEmaAlpha) * smoothedHz
+                                  : rawHz;
+                lastValidHz   = smoothedHz;
+                silenceFrames = 0;
+            }
+            else
+            {
+                // Hold last valid pitch for kSilenceHoldFrames before releasing to zero
+                ++silenceFrames;
+                if (silenceFrames > kSilenceHoldFrames)
+                    smoothedHz = 0.0f;
+                // else: smoothedHz keeps its last value
+            }
+
+            fundamentalHz.store (smoothedHz);
             accumulatorFill = 0;
         }
     }
