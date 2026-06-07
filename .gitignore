@@ -24,3 +24,6 @@ build/
 # Swift Package Manager
 .build/
 .swiftpm/
+
+# JUCE plugin build artifacts
+Plugin/build/
