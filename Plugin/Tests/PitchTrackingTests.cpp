@@ -80,6 +80,32 @@ int main()
     check (holdMsToFrames (1000.0f, 48000.0, 0)   == 0, "zero fft size -> 0");
     check (holdMsToFrames (-50.0f, 48000.0, 4096) == 0, "negative ms -> 0");
 
+    using clarisynth::downwardSlewRatioPerFrame;
+
+    std::printf ("\ndownwardSlewRatioPerFrame:\n");
+
+    // One frame at 48k/4096 is 85.33 ms. 90 st/s -> 7.68 st/frame -> ratio 2^(-7.68/12).
+    check (approx (downwardSlewRatioPerFrame (90.0f, 48000.0, 4096),
+                   std::pow (2.0f, -(90.0f * 4096.0f / 48000.0f) / 12.0f), 1e-5f),
+           "90 st/s ratio matches 2^(-st_per_frame/12)");
+
+    // A ratio applied to a pitch caps the per-frame drop: 90 st/s from 200 Hz floors near 128 Hz.
+    check (approx (200.0f * downwardSlewRatioPerFrame (90.0f, 48000.0, 4096), 128.3f, 1.0f),
+           "200 Hz drops to ~128 Hz in one frame at 90 st/s");
+
+    // Higher rate => weaker limiting (ratio closer to 0 / smaller floor).
+    check (downwardSlewRatioPerFrame (1200.0f, 48000.0, 4096)
+             < downwardSlewRatioPerFrame (90.0f, 48000.0, 4096),
+           "higher st/s -> smaller ratio (less limiting)");
+
+    // Very high rate is effectively unlimited.
+    check (downwardSlewRatioPerFrame (1200.0f, 48000.0, 4096) < 0.01f,
+           "1200 st/s -> ~unlimited");
+
+    // Invalid config -> 0 (unlimited), never freezes tracking.
+    check (downwardSlewRatioPerFrame (90.0f, 0.0, 4096) == 0.0f, "zero sample rate -> 0 (unlimited)");
+    check (downwardSlewRatioPerFrame (90.0f, 48000.0, 0) == 0.0f, "zero fft size -> 0 (unlimited)");
+
     std::printf ("\nspectral_processor_parabolic_offset:\n");
 
     // Symmetric peak -> vertex exactly at centre.

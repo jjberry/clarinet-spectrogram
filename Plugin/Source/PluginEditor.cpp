@@ -67,15 +67,15 @@ ClariSynthEditor::ClariSynthEditor (ClariSynthProcessor& p)
         addAndMakeVisible (label);
     };
 
-    setupRotary (pitchSmoothSlider, pitchSmoothLabel, "Smooth", {});
-    setupRotary (pitchHoldSlider,   pitchHoldLabel,   "Hold",   " ms");
-    setupRotary (pitchMinSlider,    pitchMinLabel,    "Min",    " Hz");
-    setupRotary (pitchMaxSlider,    pitchMaxLabel,    "Max",    " Hz");
+    setupRotary (pitchSmoothSlider, pitchSmoothLabel, "Smooth",  {});
+    setupRotary (pitchSlewSlider,   pitchSlewLabel,   "Slew Dn", " st/s");
+    setupRotary (pitchMinSlider,    pitchMinLabel,    "Min",     " Hz");
+    setupRotary (pitchMaxSlider,    pitchMaxLabel,    "Max",     " Hz");
 
     pitchSmoothAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
         apvts, "pitchSmoothing", pitchSmoothSlider);
-    pitchHoldAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-        apvts, "pitchHoldMs", pitchHoldSlider);
+    pitchSlewAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        apvts, "pitchSlewDown", pitchSlewSlider);
     pitchMinAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
         apvts, "pitchMinHz", pitchMinSlider);
     pitchMaxAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
@@ -133,8 +133,8 @@ void ClariSynthEditor::resized()
     mixSlider.setBounds (col);
 
     // Bottom section: 4 pitch rotary knobs
-    juce::Slider* pitchSliders[] = { &pitchSmoothSlider, &pitchHoldSlider, &pitchMinSlider, &pitchMaxSlider };
-    juce::Label*  pitchLabels[]  = { &pitchSmoothLabel,  &pitchHoldLabel,  &pitchMinLabel,  &pitchMaxLabel  };
+    juce::Slider* pitchSliders[] = { &pitchSmoothSlider, &pitchSlewSlider, &pitchMinSlider, &pitchMaxSlider };
+    juce::Label*  pitchLabels[]  = { &pitchSmoothLabel,  &pitchSlewLabel,  &pitchMinLabel,  &pitchMaxLabel  };
 
     const int pitchColW = pitchArea.getWidth() / 4;
     for (int i = 0; i < 4; ++i)

@@ -23,4 +23,23 @@ inline int holdMsToFrames (float holdMs, double sampleRate, int fftSize) noexcep
     return (int) std::lround ((double) holdMs / frameMs);
 }
 
+/** Per-frame downward gain ratio for a pitch slew limit specified in semitones/second.
+
+    The tracked pitch is allowed to fall to at most `smoothedHz * ratio` each analysis
+    frame. Returns a value in (0, 1]:
+      - ratio == 1  => no downward movement permitted (rate of 0 st/s)
+      - ratio -> 0  => effectively unlimited (very high st/s)
+    Upward movement is never limited by this. Returns 0 (i.e. unlimited) for an invalid
+    sample rate / fft size so tracking is never accidentally frozen.
+*/
+inline float downwardSlewRatioPerFrame (float semitonesPerSec, double sampleRate, int fftSize) noexcept
+{
+    if (sampleRate <= 0.0 || fftSize <= 0)
+        return 0.0f;
+
+    const double frameSec   = (double) fftSize / sampleRate;
+    const double stPerFrame = (double) semitonesPerSec * frameSec;
+    return (float) std::pow (2.0, -stPerFrame / 12.0);
+}
+
 } // namespace clarisynth

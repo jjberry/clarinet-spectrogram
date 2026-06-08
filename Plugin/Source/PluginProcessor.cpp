@@ -37,10 +37,14 @@ ClariSynthProcessor::createParameterLayout()
         "pitchSmoothing", "Pitch Smoothing",
         juce::NormalisableRange<float> (0.01f, 1.0f, 0.001f), 0.2f));
 
-    // How long to hold the last detected pitch through silence before releasing, in ms.
+    // Downward pitch slew limit (semitones/sec). Caps how fast the tracked pitch may FALL,
+    // which rides over the brief downward dip during plucked-note attack transients while
+    // leaving upward tracking instant. Skewed low (more resolution where it matters); the
+    // top of the range is effectively unlimited.
+    auto slewRange = juce::NormalisableRange<float> (6.0f, 1200.0f, 1.0f);
+    slewRange.setSkewForCentre (90.0f);
     layout.add (std::make_unique<juce::AudioParameterFloat> (
-        "pitchHoldMs", "Pitch Hold",
-        juce::NormalisableRange<float> (0.0f, 2000.0f, 1.0f), 1000.0f));
+        "pitchSlewDown", "Pitch Slew Down", slewRange, 90.0f));
 
     // Fundamental search range. Skewed so low frequencies get more of the control's travel.
     auto minRange = juce::NormalisableRange<float> (40.0f, 500.0f, 1.0f);
@@ -94,6 +98,9 @@ void ClariSynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     lastValidHz       = 0.0f;
     silenceFrames     = 0;
 
+    // Hold time is fixed (1 s feels right); only the smoothing, slew and range are exposed.
+    silenceHoldFrames = clarisynth::holdMsToFrames (kSilenceHoldMs, sampleRate, kFftSize);
+
     harmonicProcessor->prepare (sampleRate, samplesPerBlock);
 }
 
@@ -139,11 +146,11 @@ void ClariSynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const int analysisChannel = clarisynth::selectAnalysisChannel (channelRms.data(), numRms);
 
     // Snapshot pitch-tracking parameters once per block (user / DAW automation controlled).
-    const float pitchAlpha  = apvts.getRawParameterValue ("pitchSmoothing")->load();
-    const float pitchHoldMs = apvts.getRawParameterValue ("pitchHoldMs")->load();
-    const float pitchMinHz  = apvts.getRawParameterValue ("pitchMinHz")->load();
-    const float pitchMaxHz  = apvts.getRawParameterValue ("pitchMaxHz")->load();
-    const int   holdFrames  = clarisynth::holdMsToFrames (pitchHoldMs, currentSampleRate, kFftSize);
+    const float pitchAlpha    = apvts.getRawParameterValue ("pitchSmoothing")->load();
+    const float pitchSlewDown = apvts.getRawParameterValue ("pitchSlewDown")->load();
+    const float pitchMinHz    = apvts.getRawParameterValue ("pitchMinHz")->load();
+    const float pitchMaxHz    = apvts.getRawParameterValue ("pitchMaxHz")->load();
+    const float downSlewRatio = clarisynth::downwardSlewRatioPerFrame (pitchSlewDown, currentSampleRate, kFftSize);
     pitchDetector->setSearchRange (pitchMinHz, pitchMaxHz);
 
     // Accumulate into FFT analysis buffer
@@ -166,18 +173,33 @@ void ClariSynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
             if (rawHz > 0.0f)
             {
-                // EMA smoothing — glide toward new estimate
-                smoothedHz    = (smoothedHz > 0.0f)
-                                  ? pitchAlpha * rawHz + (1.0f - pitchAlpha) * smoothedHz
-                                  : rawHz;
+                if (smoothedHz > 0.0f)
+                {
+                    // EMA smoothing — glide toward new estimate
+                    float candidate = pitchAlpha * rawHz + (1.0f - pitchAlpha) * smoothedHz;
+
+                    // Downward slew limit: cap how far pitch may fall this frame. Upward
+                    // moves are instant; downward dips (attack transients, octave glitches)
+                    // are clamped so a brief wrong-low estimate is ridden over before it
+                    // can pull the tracked pitch down.
+                    const float minHz = smoothedHz * downSlewRatio;
+                    if (candidate < minHz)
+                        candidate = minHz;
+
+                    smoothedHz = candidate;
+                }
+                else
+                {
+                    smoothedHz = rawHz;  // fresh note from silence — start at detected pitch
+                }
                 lastValidHz   = smoothedHz;
                 silenceFrames = 0;
             }
             else
             {
-                // Hold last valid pitch for holdFrames frames before releasing to zero
+                // Hold last valid pitch for silenceHoldFrames frames before releasing to zero
                 ++silenceFrames;
-                if (silenceFrames > holdFrames)
+                if (silenceFrames > silenceHoldFrames)
                     smoothedHz = 0.0f;
                 // else: smoothedHz keeps its last value
             }
