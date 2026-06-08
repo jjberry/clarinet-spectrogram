@@ -21,9 +21,15 @@ private:
     std::array<juce::Slider, 8> harmonicSliders;
     std::array<juce::Label,  8> harmonicLabels;
 
+    // Pitch-tracking controls (rotary)
+    juce::Slider pitchSmoothSlider, pitchHoldSlider, pitchMinSlider, pitchMaxSlider;
+    juce::Label  pitchSmoothLabel, pitchHoldLabel, pitchMinLabel, pitchMaxLabel;
+    juce::Rectangle<int> pitchSectionHeader;  // bounds of the "Pitch Tracking" heading, set in resized()
+
     // Attachments keep sliders in sync with APVTS
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> oddEvenAttach, centroidAttach, mixAttach;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 8> harmonicAttachments;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchSmoothAttach, pitchHoldAttach, pitchMinAttach, pitchMaxAttach;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ClariSynthEditor)
 };

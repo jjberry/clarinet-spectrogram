@@ -127,7 +127,9 @@ final class AudioEngine: ObservableObject {
                     spectral_processor_hps($0.baseAddress,
                                            Int32($0.count),
                                            binHz,
-                                           5)
+                                           5,
+                                           80.0,    // min Hz (low clarinet / bass clarinet)
+                                           2000.0)  // max Hz (altissimo)
                 }
 
                 let oddEvenRatio = magnitudeDB.withUnsafeBufferPointer {

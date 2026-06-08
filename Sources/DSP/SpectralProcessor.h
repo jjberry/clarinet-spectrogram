@@ -38,11 +38,16 @@ float spectral_processor_odd_even_ratio(const float *magnitude_db,
 /// Harmonic Product Spectrum pitch estimator.
 /// Multiplies downsampled copies of the magnitude spectrum to find the fundamental.
 /// `num_harmonics` — number of HPS stages (4–5 recommended).
+/// `min_hz` / `max_hz` — restrict the fundamental search to this range. Pass
+/// 80 / 2000 for the previous default (low clarinet to altissimo). If the range is
+/// invalid (min >= max, or non-positive) the function returns 0.
 /// Returns fundamental frequency in Hz, or 0 if no pitch detected / signal too quiet.
 float spectral_processor_hps(const float *magnitude_db,
                               int bin_count,
                               float bin_hz,
-                              int num_harmonics);
+                              int num_harmonics,
+                              float min_hz,
+                              float max_hz);
 
 #ifdef __cplusplus
 }

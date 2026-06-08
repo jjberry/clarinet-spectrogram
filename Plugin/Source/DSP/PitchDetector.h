@@ -10,4 +10,7 @@ public:
     virtual ~PitchDetector() = default;
     virtual float detectPitch (const float* magnitudeDb, int binCount, float binHz) = 0;
     virtual juce::String getName() const = 0;
+
+    // Restrict the fundamental search to [minHz, maxHz]. Default: no-op (detector ignores it).
+    virtual void setSearchRange (float /*minHz*/, float /*maxHz*/) {}
 };

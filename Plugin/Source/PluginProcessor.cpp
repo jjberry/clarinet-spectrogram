@@ -3,6 +3,7 @@
 #include "DSP/HPSPitchDetector.h"
 #include "DSP/BandpassProcessor.h"
 #include "DSP/ChannelRouting.h"
+#include "DSP/PitchTracking.h"
 #include <array>
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -29,6 +30,28 @@ ClariSynthProcessor::createParameterLayout()
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         "mix", "Mix",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f));
+
+    // --- Pitch tracking ---
+    // EMA smoothing coefficient: low = smooth/slow glide, high = snappy/responsive.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        "pitchSmoothing", "Pitch Smoothing",
+        juce::NormalisableRange<float> (0.01f, 1.0f, 0.001f), 0.2f));
+
+    // How long to hold the last detected pitch through silence before releasing, in ms.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        "pitchHoldMs", "Pitch Hold",
+        juce::NormalisableRange<float> (0.0f, 2000.0f, 1.0f), 1000.0f));
+
+    // Fundamental search range. Skewed so low frequencies get more of the control's travel.
+    auto minRange = juce::NormalisableRange<float> (40.0f, 500.0f, 1.0f);
+    minRange.setSkewForCentre (120.0f);
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        "pitchMinHz", "Pitch Min", minRange, 80.0f));
+
+    auto maxRange = juce::NormalisableRange<float> (500.0f, 4000.0f, 1.0f);
+    maxRange.setSkewForCentre (1500.0f);
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        "pitchMaxHz", "Pitch Max", maxRange, 2000.0f));
 
     return layout;
 }
@@ -115,6 +138,14 @@ void ClariSynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     const int analysisChannel = clarisynth::selectAnalysisChannel (channelRms.data(), numRms);
 
+    // Snapshot pitch-tracking parameters once per block (user / DAW automation controlled).
+    const float pitchAlpha  = apvts.getRawParameterValue ("pitchSmoothing")->load();
+    const float pitchHoldMs = apvts.getRawParameterValue ("pitchHoldMs")->load();
+    const float pitchMinHz  = apvts.getRawParameterValue ("pitchMinHz")->load();
+    const float pitchMaxHz  = apvts.getRawParameterValue ("pitchMaxHz")->load();
+    const int   holdFrames  = clarisynth::holdMsToFrames (pitchHoldMs, currentSampleRate, kFftSize);
+    pitchDetector->setSearchRange (pitchMinHz, pitchMaxHz);
+
     // Accumulate into FFT analysis buffer
     const float* readPtr = buffer.getReadPointer (analysisChannel);
     int srcOffset = 0;
@@ -137,16 +168,16 @@ void ClariSynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             {
                 // EMA smoothing — glide toward new estimate
                 smoothedHz    = (smoothedHz > 0.0f)
-                                  ? kPitchEmaAlpha * rawHz + (1.0f - kPitchEmaAlpha) * smoothedHz
+                                  ? pitchAlpha * rawHz + (1.0f - pitchAlpha) * smoothedHz
                                   : rawHz;
                 lastValidHz   = smoothedHz;
                 silenceFrames = 0;
             }
             else
             {
-                // Hold last valid pitch for kSilenceHoldFrames before releasing to zero
+                // Hold last valid pitch for holdFrames frames before releasing to zero
                 ++silenceFrames;
-                if (silenceFrames > kSilenceHoldFrames)
+                if (silenceFrames > holdFrames)
                     smoothedHz = 0.0f;
                 // else: smoothedHz keeps its last value
             }

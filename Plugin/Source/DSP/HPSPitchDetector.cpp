@@ -3,5 +3,5 @@
 
 float HPSPitchDetector::detectPitch (const float* magnitudeDb, int binCount, float binHz)
 {
-    return spectral_processor_hps (magnitudeDb, binCount, binHz, numHarmonics);
+    return spectral_processor_hps (magnitudeDb, binCount, binHz, numHarmonics, minHz, maxHz);
 }

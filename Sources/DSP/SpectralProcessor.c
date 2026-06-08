@@ -144,13 +144,16 @@ float spectral_processor_odd_even_ratio(const float *magnitude_db,
 float spectral_processor_hps(const float *magnitude_db,
                               int bin_count,
                               float bin_hz,
-                              int num_harmonics) {
+                              int num_harmonics,
+                              float min_hz,
+                              float max_hz) {
     if (!magnitude_db || bin_count < 2 || bin_hz <= 0.0f) return 0.0f;
     if (num_harmonics < 2) num_harmonics = 2;
+    if (min_hz <= 0.0f || max_hz <= min_hz) return 0.0f;
 
-    // Search range: 80 Hz (low clarinet/bass clarinet) to 2 kHz (altissimo)
-    int min_bin = (int)ceilf(80.0f  / bin_hz);
-    int max_bin = (int)floorf(2000.0f / bin_hz);
+    // Caller-supplied search range (default 80 Hz low clarinet/bass clarinet to 2 kHz altissimo)
+    int min_bin = (int)ceilf(min_hz  / bin_hz);
+    int max_bin = (int)floorf(max_hz / bin_hz);
     // With num_harmonics stages the highest usable bin is bin_count / num_harmonics
     if (max_bin >= bin_count / num_harmonics) max_bin = bin_count / num_harmonics - 1;
     if (min_bin < 1 || min_bin > max_bin) return 0.0f;

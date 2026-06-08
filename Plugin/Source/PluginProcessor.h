@@ -57,12 +57,12 @@ private:
 
     std::atomic<float> fundamentalHz { 0.0f };
 
-    // Pitch smoothing: EMA on raw HPS output, with hold on silence
+    // Pitch smoothing: EMA on raw HPS output, with hold on silence.
+    // Smoothing coefficient, hold time, and search range are exposed as APVTS parameters
+    // (pitchSmoothing / pitchHoldMs / pitchMinHz / pitchMaxHz).
     float  smoothedHz      = 0.0f;  // EMA-smoothed fundamental (audio thread only)
     float  lastValidHz     = 0.0f;  // last non-zero estimate, held during silence
     int    silenceFrames   = 0;     // consecutive FFT frames with no pitch detected
-    static constexpr int kSilenceHoldFrames = 12;  // hold pitch for ~12 FFT frames before releasing
-    static constexpr float kPitchEmaAlpha   = 0.2f; // lower = smoother but slower to track
 
     double currentSampleRate   = 44100.0;
     int    currentBlockSize    = 512;
