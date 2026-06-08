@@ -39,3 +39,12 @@ target_link_libraries(ClariSynth PRIVATE
     juce::juce_dsp
     "-framework Accelerate"
 )
+
+# ---- Unit tests ----
+enable_testing()
+
+add_executable(ClariSynthTests Tests/ChannelRoutingTests.cpp)
+target_compile_features(ClariSynthTests PRIVATE cxx_std_17)
+target_include_directories(ClariSynthTests PRIVATE Source/DSP)
+
+add_test(NAME ChannelRoutingTests COMMAND ClariSynthTests)

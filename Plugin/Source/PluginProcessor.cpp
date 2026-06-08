@@ -2,6 +2,8 @@
 #include "PluginEditor.h"
 #include "DSP/HPSPitchDetector.h"
 #include "DSP/BandpassProcessor.h"
+#include "DSP/ChannelRouting.h"
+#include <array>
 
 juce::AudioProcessorValueTreeState::ParameterLayout
 ClariSynthProcessor::createParameterLayout()
@@ -96,25 +98,22 @@ void ClariSynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const int numSamples   = buffer.getNumSamples();
     const int numInChans   = getTotalNumInputChannels();
     const int numOutChans  = getTotalNumOutputChannels();
-    const int bufChans     = buffer.getNumChannels();
-
-    // Read RMS from all channels before any manipulation. Without this, JUCE's AudioBuffer
-    // "clear" optimisation appears to discard subsequent copyFrom writes to ch0, leaving
-    // it zeroed on output even though the data was written. Reading via getRMSLevel
-    // forces the buffer into a non-clear state for all channels.
-    for (int ch = 0; ch < bufChans; ++ch)
-        (void) buffer.getRMSLevel (ch, 0, numSamples);
-
 
     // Zero any output channels that have no corresponding input
     for (int ch = numInChans; ch < numOutChans; ++ch)
         buffer.clear (ch, 0, numSamples);
 
-    // Use channel 0 for FFT analysis (or the last non-silent channel if ch0 is empty)
-    int analysisChannel = 0;
-    float ch0rms = buffer.getRMSLevel (0, 0, numSamples);
-    if (ch0rms < 1e-6f && numInChans > 1)
-        analysisChannel = 1; // fall back to ch1 if ch0 is silent
+    // Pick the loudest input channel for analysis. A simple "is ch0 silent?" test fails
+    // when ch0 carries only a noise floor (e.g. an unused hardware input feeding a few
+    // micro-volts), which sits well above any fixed threshold — so we compare channels
+    // against each other instead (see selectAnalysisChannel). This is robust whether the
+    // source is on ch0, ch1, or both (mono guitar on a stereo pair lands on one channel).
+    std::array<float, 64> channelRms {};
+    const int numRms = std::min (numInChans, (int) channelRms.size());
+    for (int ch = 0; ch < numRms; ++ch)
+        channelRms[(size_t) ch] = buffer.getRMSLevel (ch, 0, numSamples);
+
+    const int analysisChannel = clarisynth::selectAnalysisChannel (channelRms.data(), numRms);
 
     // Accumulate into FFT analysis buffer
     const float* readPtr = buffer.getReadPointer (analysisChannel);
@@ -157,9 +156,10 @@ void ClariSynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // If the signal is on ch1 only, copy it to ch0 so both output channels carry audio
-    if (analysisChannel == 1 && numOutChans > 1)
-        buffer.copyFrom (0, 0, buffer, 1, 0, numSamples);
+    // Broadcast the chosen (mono) source across every output channel so no output is left
+    // silent — works whether the source landed on ch0 or ch1.
+    clarisynth::broadcastToAllChannels (buffer.getArrayOfWritePointers(),
+                                        numOutChans, analysisChannel, numSamples);
 
     // Apply harmonic processing
     HarmonicParams params = buildParams();
