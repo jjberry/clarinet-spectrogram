@@ -49,6 +49,13 @@ float spectral_processor_hps(const float *magnitude_db,
                               float min_hz,
                               float max_hz);
 
+/// Quadratic (parabolic) peak interpolation. Given three equally-spaced samples
+/// straddling a local maximum (`ym` left, `y0` centre/peak, `yp` right), returns the
+/// sub-sample offset of the true peak in [-0.5, +0.5]. Used to refine the HPS bin to
+/// sub-bin frequency accuracy, which matters most at low pitches where bins are widely
+/// spaced. Returns 0 if the three points don't form a peak.
+float spectral_processor_parabolic_offset(float ym, float y0, float yp);
+
 #ifdef __cplusplus
 }
 #endif

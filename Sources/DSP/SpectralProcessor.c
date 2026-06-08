@@ -141,6 +141,29 @@ float spectral_processor_odd_even_ratio(const float *magnitude_db,
     return even_sum > 1e-10f ? odd_sum / even_sum : 0.0f;
 }
 
+float spectral_processor_parabolic_offset(float ym, float y0, float yp) {
+    // Peak of the parabola through (-1, ym), (0, y0), (1, yp).
+    float denom = ym - 2.0f * y0 + yp;
+    if (denom >= 0.0f) return 0.0f;   // not concave-down: no interior peak
+    float offset = 0.5f * (ym - yp) / denom;
+    if (offset >  0.5f) offset =  0.5f;
+    if (offset < -0.5f) offset = -0.5f;
+    return offset;
+}
+
+// Harmonic product (linear amplitude) for candidate fundamental bin `b`.
+// Returns 0 if any required harmonic bin falls outside the spectrum.
+static float hps_product(const float *magnitude_db, int bin_count, int b, int num_harmonics) {
+    float product = 1.0f;
+    for (int h = 1; h <= num_harmonics; h++) {
+        int idx = b * h;
+        if (idx >= bin_count) return 0.0f;
+        // Convert dB → linear amplitude: 10^(dB/20)
+        product *= powf(10.0f, magnitude_db[idx] * 0.05f);
+    }
+    return product;
+}
+
 float spectral_processor_hps(const float *magnitude_db,
                               int bin_count,
                               float bin_hz,
@@ -162,13 +185,7 @@ float spectral_processor_hps(const float *magnitude_db,
     int   best_bin     =  0;
 
     for (int b = min_bin; b <= max_bin; b++) {
-        float product = 1.0f;
-        for (int h = 1; h <= num_harmonics; h++) {
-            int idx = b * h;
-            if (idx >= bin_count) { product = 0.0f; break; }
-            // Convert dB → linear amplitude: 10^(dB/20)
-            product *= powf(10.0f, magnitude_db[idx] * 0.05f);
-        }
+        float product = hps_product(magnitude_db, bin_count, b, num_harmonics);
         if (product > best_product) {
             best_product = product;
             best_bin     = b;
@@ -179,5 +196,23 @@ float spectral_processor_hps(const float *magnitude_db,
     // Reject if fundamental bin is below the silence floor
     if (magnitude_db[best_bin] < -70.0f) return 0.0f;
 
-    return (float)best_bin * bin_hz;
+    // Refine the integer bin to sub-bin accuracy by parabolic interpolation of the
+    // fundamental's own spectral peak (magnitude_db is already log/dB, which is what the
+    // quadratic fit wants). This is what makes low-pitch detection usable: at 48 kHz /
+    // 4096-pt FFT the bins are ~11.7 Hz apart (~3 semitones near Bb1), but the peak lands
+    // within a fraction of a bin of the true fundamental.
+    //
+    // Note: we interpolate the fundamental peak, NOT the HPS product across candidate bins.
+    // The product is sharply/asymmetrically peaked at low pitch (moving the candidate by one
+    // bin moves the Nth harmonic by N bins), which skews the estimate; the fundamental's own
+    // ~2-bin Hann leakage is cleanly parabolic. Valid neighbour bins always exist here since
+    // 1 <= best_bin <= bin_count/num_harmonics - 1.
+    float refined_bin = (float)best_bin;
+    if (best_bin >= 1 && best_bin + 1 < bin_count) {
+        refined_bin += spectral_processor_parabolic_offset (magnitude_db[best_bin - 1],
+                                                            magnitude_db[best_bin],
+                                                            magnitude_db[best_bin + 1]);
+    }
+
+    return refined_bin * bin_hz;
 }

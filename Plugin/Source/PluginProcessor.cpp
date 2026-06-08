@@ -46,7 +46,7 @@ ClariSynthProcessor::createParameterLayout()
     auto minRange = juce::NormalisableRange<float> (40.0f, 500.0f, 1.0f);
     minRange.setSkewForCentre (120.0f);
     layout.add (std::make_unique<juce::AudioParameterFloat> (
-        "pitchMinHz", "Pitch Min", minRange, 80.0f));
+        "pitchMinHz", "Pitch Min", minRange, 50.0f));  // 50 Hz covers bass clarinet low Bb1 (~58 Hz)
 
     auto maxRange = juce::NormalisableRange<float> (500.0f, 4000.0f, 1.0f);
     maxRange.setSkewForCentre (1500.0f);

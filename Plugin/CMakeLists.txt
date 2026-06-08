@@ -49,8 +49,11 @@ target_include_directories(ClariSynthTests PRIVATE Source/DSP)
 
 add_test(NAME ChannelRoutingTests COMMAND ClariSynthTests)
 
-add_executable(PitchTrackingTests Tests/PitchTrackingTests.cpp)
+add_executable(PitchTrackingTests
+    Tests/PitchTrackingTests.cpp
+    ../Sources/DSP/SpectralProcessor.c)
 target_compile_features(PitchTrackingTests PRIVATE cxx_std_17)
-target_include_directories(PitchTrackingTests PRIVATE Source/DSP)
+target_include_directories(PitchTrackingTests PRIVATE Source/DSP ../Sources/DSP)
+target_link_libraries(PitchTrackingTests PRIVATE "-framework Accelerate")
 
 add_test(NAME PitchTrackingTests COMMAND PitchTrackingTests)
